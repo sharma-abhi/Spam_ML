@@ -4,7 +4,6 @@ from elasticsearch import Elasticsearch
 from os import listdir
 import string
 from bs4 import BeautifulSoup
-import re
 import cPickle as cp
 
 
@@ -17,7 +16,7 @@ class CreateIndex(object):
         self.es = Elasticsearch()
         self.file_corpus_path = 'trec07p/data'
         self.label_path = 'trec07p/full'
-        self.label_file_name ='index'
+        self.label_file_name = 'index'
 
         stop_file_name = 'stoplist.txt'
         with open(stop_file_name) as f:
@@ -34,7 +33,7 @@ class CreateIndex(object):
         with open(self.label_path+"/"+self.label_file_name) as f:
             for line in f:
                 label_list = line.split()
-                label_dict[label_list[1].split('/')[2]] = 1 if label_list[0] == 'spam' else 0
+                label_dict[label_list[1].split('/')[2]] = '1' if label_list[0] == 'spam' else '0'
         return label_dict
 
     def compute_index(self):
@@ -42,8 +41,7 @@ class CreateIndex(object):
         Creates the index in ES
         :return: Void
         """
-        doc_length_dict = {}
-        count = 0
+        #spam_dict = dict()
         label_dict = self.compute_labels()
         print "label computation complete\n"
 
@@ -54,10 +52,11 @@ class CreateIndex(object):
             with open(self.file_corpus_path+"/"+data_file) as f:
                 extract_text = False
                 text_string = f.read()
+                original_string = text_string
+
                 text_string = text_string.replace("\n", " ")
                 text_string = text_string.replace("\t", "")
 
-                '''
                 # Removing stop words
                 tlist = text_string.split()
                 slist = []
@@ -66,7 +65,7 @@ class CreateIndex(object):
                         slist.append('')
                     else:
                         slist.append(tlist[i])
-                text_string = ' '.join(slist)'''
+                text_string = ' '.join(slist)
 
                 # Converting to lower text
                 text_string = text_string.lower()
@@ -75,11 +74,21 @@ class CreateIndex(object):
                     if p != '_' and p != '-' and p != '\'':
                         text_string = text_string.replace(p, " ")
                 text_string = text_string.replace("  ", " ")
+                #text_string = text_string.replace("p", "")
+                #text_string = text_string.replace("div", "")
 
                 doc_length = len(text_string.split())
                 text_string = BeautifulSoup(text_string).text
-                doc = {'docno': data_file, 'text': text_string, "spam": label_dict[data_file], 'doclength': doc_length}
+
+                spam_val = label_dict[data_file]
+
+                doc = {'docno': data_file, 'text': text_string, "spam": spam_val, 'doclength': doc_length,
+                       'original': original_string.decode('ascii', errors='ignore')}
+
                 res = self.es.index(index="spam_dataset", doc_type='document', id=data_file, body=doc)
+
+        with open("spam_labels.txt", "w") as f:
+            cp.dump(label_dict, f)
 
 if __name__ == "__main__":
     ci = CreateIndex()
