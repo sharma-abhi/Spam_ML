@@ -16,7 +16,7 @@ class ComputeMatrix(object):
     """
     def __init__(self):
         self.spam_search_size = 75420
-        self.crawl_search_size = 34540
+        self.crawl_search_size = 1000
         self.es = Elasticsearch(timeout=180)
 
         file_corpus_path = 'trec07p/data'
@@ -31,7 +31,7 @@ class ComputeMatrix(object):
 
         :return:
         """
-        spam_list = ['anxiety', 'drug', 'free', 'as seen on', 'buy', 'buy direct', 'order status', 'shopper',
+        spam_list = ['anxiety', 'free', 'as seen on', 'buy', 'buy direct', 'order status', 'shopper',
                      'meet singles', 'babes', 'additional income', 'earn', 'per week', 'extra income', 'work at home',
                      'work from home', 'money making', 'f r e e', 'discount', 'cheap', 'lowest price',
                      'no fees', 'million', 'mortgage rates', 'profit', 'dollars', 'credit card', 'get paid', 'wife',
@@ -53,8 +53,7 @@ class ComputeMatrix(object):
             for spam in spam_ngrams:
                 print "Starting fetch for gram: ", spam
                 result = self.es.search(index="spam_dataset", doc_type="document", size=self.spam_search_size,
-                                        analyzer="my_english", body={"query": {"match": {"text": spam}}},
-                                        fields='spam')
+                                        analyzer="my_english", body={"query": {"match": {"text": spam}}})
                 hits = result['hits']['hits']
                 print "Result Size: ", len(hits)
                 for i in range(len(hits)):
@@ -95,9 +94,9 @@ class ComputeMatrix(object):
                 for i in range(len(hits)):
                     crawl_doc_set.add(hits[i]['_id'])
                     if tmatrix.get(spam) is None:
-                        tmatrix[spam] = {hits[i]['_id']: 1}
+                        tmatrix[spam] = {hits[i]['_id']: hits[i]['_score']}
                     else:
-                        tmatrix[spam][hits[i]['_id']] = 1
+                        tmatrix[spam][hits[i]['_id']] = hits[i]['_score']
 
             with open('tmatrix.txt', 'w') as f:
                 f.write(str(tmatrix))
@@ -105,7 +104,10 @@ class ComputeMatrix(object):
 
             df2 = pd.DataFrame()
             for spam in spam_ngrams:
-                df2[spam] = pd.Series(tmatrix[spam], index=crawl_doc_set)
+                if tmatrix.get(spam) is None:
+                    df2[spam] = 0
+                else:
+                    df2[spam] = pd.Series(tmatrix[spam], index=crawl_doc_set)
             df2 = df2.fillna(0)
             print "Test Data Frame created. Printing..."
             df2.to_csv('goo.csv')
